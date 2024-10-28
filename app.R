@@ -1,5 +1,6 @@
 
 library(shiny)
+library(jsonlite)
 
 ui = fluidPage(
   numericInput("n", "n", 1),
