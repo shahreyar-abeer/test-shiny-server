@@ -1,0 +1,197 @@
+
+options(renv.consent = TRUE)
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+
+# renv::init()
+# renv::snapshot()
+# loading user
+
+
+## LOADING DEPENDENCIES ---------------------------------------------
+# library(profvis)
+library(here)
+source(here("code","global.R"), local = F)
+# map libraries:
+library(shiny)
+library(leaflet)
+library(leafem)
+library(sp)
+library(sf)
+sf_use_s2(FALSE) # This is important
+library(leaflet.extras)
+# sets max memory size for raster data and helper vars
+options(shiny.maxRequestSize = 30*1024^2)
+# data - analysis - telecon libraries:
+library(dygraphs)
+library(openxlsx)
+library(zip)
+library(zoo)
+require(dplyr)
+require(duckdb)
+require(duckplyr)
+require(DBI)
+require(arrow)
+
+# create database connection:
+# con <- dbConnect(duckdb::duckdb(dbdir = "~/kDrive/Shared/Data/mydb_prf.duckdb")) # Beat
+#con <- dbConnect(duckdb::duckdb(dbdir = "data/ata/mydb_prf.duckdb"))        # Nik
+
+# # Loading Modules
+source(here("MODULES","TMS_precip.R"), local = F)
+# source(here("MODULES","TMS_interval.R"), local = F)
+# source(here("MODULES","TMS_portfolio.R"), local = F)
+# source(here("MODULES","TMS_results.R"), local = F)
+# source(here("MODULES","TMS_data.R"), local = F)
+
+# loading helpers
+source(here("code","helpers_prf.R"), local = F)   # this shall be the helper.R collection for this app // "helpers.R" to be deleted
+source(here("code","map_helpers.R"), local = F)  # Source the map helper
+# source(here("code","download_manager.R"), local = F)
+# source(here("code","ods_data_helper.R"), local = F)
+
+
+# NILO THIS NEED TO BE FED BY THE PROXY // MUST BE AFTER SOURCING
+# proxy_user          <- Sys.getenv("SHINYPROXY_USERNAME")
+proxy_user <- "dummy_user@dummy.com"
+
+# verified_proxy_user <- check_get_email_id(proxy_user)
+verified_proxy_user <- "dummy_user@dummy.com"
+
+#Function of Beat to make different user groups
+source(here("code","ui_profile_definitions.R"), local = F)
+ui_profile          <- "terra_agri"
+
+# proxy_user <- "info@terra-ms.com"
+# Sys.setenv("terra_user" = verified_proxy_user)
+Sys.setenv("dataset" = "gadm")
+
+# loading parameters - I don't think this is fully necessary unless including it in each module's UI
+params <- list(
+  ui_elems = get_ui_elems(),
+  sys_params = get_sys_params()
+)
+
+params$sys_params$transform_function
+
+# # creating the alerts messages // max number of alerts shown in notification
+# alert_message <- CREATE_alert_message(params, n_max_alert = 5)
+
+## UI PART: APP UI FUNCTION ---------------------------------------------
+print(paste0(format(Sys.time(), "%Y-%m-%d %H:%M:%S"),' - ','App.R - ','Start_ui'))
+ui <- navbarPage(id = "main_tabset",
+                 
+                 title = tags$img(src=ui_defs[ui_profile,'img'], height = "100%"),
+                 #think this is what keeps the style and texts all the same as the current terra app 
+                 header = tagList(
+                   tags$link(rel = "stylesheet", type = "text/css", href = "css/ssa_modal.css"),
+                   tags$link(rel = "stylesheet", type = "text/css", href = "css/ssa_navbar.css"),
+                   tags$link(rel = "stylesheet", type = "text/css", href = "css/ssa_leaflet.css"),
+                   tags$link(rel = "stylesheet", type = "text/css", href = "css/ssa_flymenu.css"),
+                   tags$link(rel = "stylesheet", type = "text/css", href = "css/ssa_dygraph.css"),
+                   tags$link(rel = "stylesheet", type = "text/css", href = "css/ssa_user.css"),
+                   tags$link(rel = "stylesheet", type = "text/css", href = "css/ssa_UIelement.css"),
+                   tags$link(rel = "stylesheet", type = "text/css", href = "css/ssa_DT.css"),
+                   useShinyjs()
+                 ),
+                 
+                 # Precip panel
+                 tabPanel(title = "Precipitation Viewer", icon = icon("cloud-rain"),
+                          value = "tab_1",
+                          div(id = "TMS_precip", TMS_precip_UI("TMS_precip"))
+                 ),
+                 
+                 # # Interval panel
+                 # tabPanel(title = "PRF Interval", icon = icon("chart-line"),
+                 #          value = "tab_2",
+                 #          div(id = "TMS_interval", TMS_interval_UI("TMS_interval"))
+                 # ),
+                 # # Portfolio panel
+                 # tabPanel(title = "Portfolio", icon = icon("chart-line"),
+                 #          value = "tab_3",
+                 #          div(id = "TMS_portfolio", TMS_portfolio_UI("TMS_portfolio"))
+                 # ),
+                 # # Results panel
+                 # tabPanel(title = "PRF Results", icon = icon("chart-line"),
+                 #          value = "tab_4",
+                 #          div(id = "TMS_results", TMS_results_UI("TMS_results"))
+                 # ),
+                 # # Data panel
+                 # tabPanel(title = "Data", icon = icon("chart-line"),
+                 #          value = "tab_5",
+                 #          div(id = "TMS_data", TMS_data_precip_UI("TMS_data"))
+                 # ),
+                 # # Analysis panel
+                 # tabPanel(title = "Analysis", icon = icon("magnifying-glass-chart"),
+                 #          value = "tab_6",
+                 #          TMS_analysis_UI("analysis_id", params) # would suggest here using similar idea of current function, but create new module script
+                 #          # and use the prior selection of the data module to create the wanted analyses of the selected data 
+                 #          # current function would possibly work as is (with set up of the data module to feed into it), but I think could be simplified/made more efficient for loading
+                 # ),
+                 
+                 # # Teleconnections panel
+                 # tabPanel(title = "Teleconnection", icon = icon("link"),
+                 #          value = "tab_7",
+                 #          TMS_tele_UI("tele_id", params)
+                 # ),
+)
+
+## SERVER PART: APP SERVER FUNCTION ---------------------------------------------
+print(paste0(format(Sys.time(), "%Y-%m-%d %H:%M:%S"),' - ','App.R - ','Start_Server'))
+server <- function(input, output, session) {
+  
+  # Create the base map with background layers - see map_helpers.R
+  background_map <- create_backgnd_map() 
+  
+  # Initialize modules
+  TMS_precip_server(     "TMS_precip",   input, output, session, background_map)
+  TMS_interval_server(   "TMS_interval", input, output, session, background_map)
+  TMS_portfolio_server(  "TMS_portfolio",input, output, session, background_map)
+  TMS_results_server(    "TMS_results",  input, output, session, background_map)
+  TMS_data_precip_server("TMS_data",     input, output, session, background_map)
+  
+  # Observe the selected tab, way of making sure the correct module is loading, help avoid overwriting etc. 
+  observeEvent(input$main_tabset, {
+    if (input$main_tabset == "tab_1") {
+      shinyjs::show("TMS_precip")     # Show module
+      shinyjs::hide("TMS_data")       # Hide module
+      shinyjs::hide("TMS_results")    # Hide module
+      shinyjs::hide("TMS_interval")   # Hide module
+      shinyjs::hide("TMS_portfolio")  # Hide module
+    } else if (input$main_tabset == "tab_2") {
+      shinyjs::hide("TMS_precip")     # Hide module
+      shinyjs::hide("TMS_data")       # Hide module
+      shinyjs::hide("TMS_results")    # Hide module
+      shinyjs::hide("TMS_portfolio")  # Hide module
+      shinyjs::show("TMS_interval")   # Show module
+    } else if (input$main_tabset == "tab_3") {
+      shinyjs::hide("TMS_precip")     # Hide module
+      shinyjs::hide("TMS_interval")   # Hide module
+      shinyjs::hide("TMS_results")    # Hide module
+      shinyjs::hide("TMS_data")       # Hide module
+      shinyjs::show("TMS_portfolio")  # Show module
+    } else if (input$main_tabset == "tab_4") {
+      shinyjs::hide("TMS_precip")     # Hide module
+      shinyjs::hide("TMS_interval")   # Hide module
+      shinyjs::hide("TMS_data")       # Hide module
+      shinyjs::hide("TMS_portfolio")  # Hide module
+      shinyjs::show("TMS_results")    # Show module
+    # } else if (input$main_tabset == "tab_5") {
+    #   shinyjs::hide("TMS_precip")     # Hide module
+    #   shinyjs::hide("TMS_interval")   # Hide module
+    #   shinyjs::hide("TMS_results")    # Hide module
+    #   shinyjs::hide("TMS_portfolio")  # Hide module
+    #   shinyjs::show("TMS_data")       # Show module
+    # } else if (input$main_tabset == "tab_6") {
+    #   shinyjs::hide("TMS_precip")     # Hide module
+    #   shinyjs::hide("TMS_interval")   # Hide module
+    #   shinyjs::hide("TMS_results")    # Hide module
+    #   shinyjs::hide("TMS_portfolio")  # Hide module
+    #   shinyjs::show("TMS_data")       # Show module
+    }
+  })
+}
+
+app <- shinyApp(ui = ui, server = server)
+print(paste0(format(Sys.time(), "%Y-%m-%d %H:%M:%S"),' - ','App.R - ','Starting App'))
+app
+
