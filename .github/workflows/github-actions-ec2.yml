@@ -7,7 +7,7 @@ on:
       - main
 
 jobs:
-  deploy:
+  build:
     name: Deploy to EC2 on main branch push or PR
     runs-on: ubuntu-latest
 
