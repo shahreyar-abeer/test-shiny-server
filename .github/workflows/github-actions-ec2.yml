@@ -18,5 +18,6 @@ jobs:
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            sudo -u shiny
             cd /srv/shiny-server/test-shiny-server
             git pull
