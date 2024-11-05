@@ -19,6 +19,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             sudo chown -R ubuntu:shiny .
+            ls -ld
             cd /srv/shiny-server/test-shiny-server
             git pull
             sudo chown -R shiny:shiny .
